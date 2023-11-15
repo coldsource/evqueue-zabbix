@@ -1,0 +1,158 @@
+zabbix_export:
+  version: '6.0'
+  date: '2023-11-15T10:10:52Z'
+  groups:
+    -
+      uuid: cce4e6eeebcb4b628e25d795cf8f1f0a
+      name: evqueue
+  templates:
+    -
+      uuid: 816396ab4fcc4b85adee839e84550e38
+      template: evQueue
+      name: evQueue
+      description: 'evQueue monitoring template'
+      groups:
+        -
+          name: evqueue
+      items:
+        -
+          uuid: 01a1deb19a4441fb8e4d789eac62cbf7
+          name: 'Statistics (global)'
+          key: 'evqueue.api[statistics, query, --type, global]'
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+        -
+          uuid: 23da1b6054be4727af26a4961580086b
+          name: 'Statistics (queues)'
+          key: 'evqueue.api[statistics, query, --type, queue]'
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+        -
+          uuid: b3f964c0af4c468cb2f2e33abb35e4f9
+          name: 'Connections (API)'
+          type: DEPENDENT
+          key: evqueue.statistics.current_api_connections
+          delay: '0'
+          history: 7d
+          preprocessing:
+            -
+              type: XMLPATH
+              parameters:
+                - string(/response/statistics/@current_api_connections)
+          master_item:
+            key: 'evqueue.api[statistics, query, --type, global]'
+        -
+          uuid: d2c4e6d19f5745ffa0ab5b956c96d1a3
+          name: 'Connections (Websocket)'
+          type: DEPENDENT
+          key: evqueue.statistics.current_ws_connections
+          delay: '0'
+          history: 7d
+          preprocessing:
+            -
+              type: XMLPATH
+              parameters:
+                - string(/response/statistics/@current_ws_connections)
+          master_item:
+            key: 'evqueue.api[statistics, query, --type, global]'
+        -
+          uuid: 3c79bbdb18c846da983fcae27291c2cb
+          name: 'Instances executing'
+          type: DEPENDENT
+          key: evqueue.statistics.instances_executing
+          delay: '0'
+          history: 7d
+          preprocessing:
+            -
+              type: XMLPATH
+              parameters:
+                - string(/response/statistics/@workflow_instance_executing)
+          master_item:
+            key: 'evqueue.api[statistics, query, --type, global]'
+        -
+          uuid: 70413c8392ee40b08a36505c4b2e0835
+          name: 'Core Process'
+          key: 'proc.num[, evqueue, , evqueue --daemon]'
+          history: 7d
+          trends: '0'
+          triggers:
+            -
+              uuid: cf397827f2a5472bb6eeee73ebfaa82d
+              expression: 'last(/evQueue/proc.num[, evqueue, , evqueue --daemon])=0'
+              name: 'evQueue core down'
+              priority: DISASTER
+      discovery_rules:
+        -
+          uuid: 7ce4b953865e440482f4e28c70d544d6
+          name: Queues
+          key: 'evqueue.api[queuepool, list]'
+          lifetime: 7d
+          item_prototypes:
+            -
+              uuid: 9514482a6938480382ab1a2ae8bd14c3
+              name: 'Queue {#NAME} concurrency'
+              type: DEPENDENT
+              key: 'evqueue.queues[{#NAME}, concurrency]'
+              delay: '0'
+              history: 7d
+              trends: '0'
+              preprocessing:
+                -
+                  type: XMLPATH
+                  parameters:
+                    - 'string(/response/statistics/queue[@name=''{#NAME}'']/@concurrency)'
+              master_item:
+                key: 'evqueue.api[statistics, query, --type, queue]'
+            -
+              uuid: 10ea9975e57e4a4fbdc3c4538d4da7df
+              name: 'Queue {#NAME} running tasks'
+              type: DEPENDENT
+              key: 'evqueue.queues[{#NAME}, running_tasks]'
+              delay: '0'
+              history: 7d
+              trends: '0'
+              preprocessing:
+                -
+                  type: XMLPATH
+                  parameters:
+                    - 'string(/response/statistics/queue[@name=''{#NAME}'']/@running_tasks)'
+              master_item:
+                key: 'evqueue.api[statistics, query, --type, queue]'
+            -
+              uuid: b6a7abf702ed4b0c821e8ee704cc28cc
+              name: 'Queue {#NAME} size'
+              type: DEPENDENT
+              key: 'evqueue.queues[{#NAME}, size]'
+              delay: '0'
+              history: 7d
+              trends: '0'
+              preprocessing:
+                -
+                  type: XMLPATH
+                  parameters:
+                    - 'string(/response/statistics/queue[@name=''{#NAME}'']/@size)'
+              master_item:
+                key: 'evqueue.api[statistics, query, --type, queue]'
+            -
+              uuid: 0962a6524f0f4216a2780624b7fdcabf
+              name: 'Queue {#NAME} capacity'
+              type: CALCULATED
+              key: 'evqueue.queue[{#NAME}, capacity]'
+              value_type: FLOAT
+              units: '%'
+              params: 'last(//evqueue.queues[{#NAME}, running_tasks]) / last(//evqueue.queues[{#NAME}, concurrency]) * 100'
+          lld_macro_paths:
+            -
+              lld_macro: '{#NAME}'
+              path: '$[''@name'']'
+          preprocessing:
+            -
+              type: XML_TO_JSON
+              parameters:
+                - ''
+            -
+              type: JSONPATH
+              parameters:
+                - $.response.queue
